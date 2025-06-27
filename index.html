@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <title>Erkaklar Oyoq Kiyimlari</title>
+  <style>
+    body {
+      font-family: times roman, sans-serif;
+      margin: 2;
+      padding: 2;
+      background: #f4f4f4;
+    }
+    header {
+      background-color: #222;
+      color: #fff;
+      padding: 15px;
+      text-align: center;
+    }
+    header p {
+      margin: 5px 0 0;
+      font-size: 14px;
+    }
+    #products {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 15px;
+      padding: 20px;
+    }
+    .product {
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .product img {
+      width: 100%;
+      height: auto;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .btn {
+      background: green;
+      color: white;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 5px;
+      margin-top: 5px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn:hover { background: darkgreen; }
+    .price {
+      color: red;
+      font-weight: bold;
+    }
+    #cart, #order-form, #admin-panel {
+      padding: 20px;
+      background: white;
+      margin: 20px;
+      border-radius: 10px;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 999;
+    }
+    .modal-content {
+      display: block;
+      margin: 5% auto;
+      max-width: 90%;
+      max-height: 80vh;
+    }
+    .close {
+      position: absolute;
+      top: 20px; right: 40px;
+      color: white;
+      font-size: 40px;
+      cursor: pointer;
+    }
+    .page-btn {
+      padding: 6px 12px;
+      margin: 5px;
+      border: 1px solid #ccc;
+      background: #eee;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .page-btn.active { background: #bbb; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Erkaklar Oyoq Kiyimlari</h1>
+    <p>Murojaat uchun: +998 91 245 55 75</p>
+  </header>
+
+  <div id="products"></div>
+  <div id="pagination"></div>
+
+  <div id="cart">
+    <h2>Korzinka</h2>
+    <ul id="cart-items"></ul>
+  </div>
+
+  <div id="order-form">
+    <h2>Buyurtma berish</h2>
+    <form onsubmit="submitOrder(event)">
+      <input type="text" id="name" placeholder="Ismingiz" required><br><br>
+      <input type="text" id="phone" placeholder="Telefon raqamingiz" required><br><br>
+      <button type="submit" class="btn">📦 Buyurtma berish</button>
+    </form>
+  </div>
+
+  <button class="btn" onclick="toggleAdmin()">Admin panelga kirish</button>
+
+  <div id="admin-panel" style="display:none">
+    <h3>Mahsulot qo‘shish</h3>
+    <form onsubmit="addProduct(event)">
+      <input id="p-name" placeholder="Nomi" required>
+      <input id="p-price" type="number" placeholder="Narxi" required>
+      <input id="p-size" placeholder="Razmer" required>
+      <input id="p-img" placeholder="Rasm nomi" required>
+      <button class="btn">➕ Qo‘shish</button>
+    </form>
+  </div>
+
+  <div id="imgModal" class="modal" onclick="closeModal()">
+    <span class="close">&times;</span>
+    <img class="modal-content" id="modalImage">
+  </div>
+
+  <script>
+    let mahsulotlar = JSON.parse(localStorage.getItem("mahsulotlar")) || Array.from({length:20}, (_,i)=>({
+      id: i+1,
+      nom: `Mahsulot ${i+1}`,
+      narx: 50000 + i * 5000,
+      razmer: ["S","M","L","XL"][i%4],
+      rasm: `Mahsulot${i+1}.jpg`
+    }));
+
+    const cart = [];
+    const perPage = 10;
+    let currentPage = 1;
+
+    function render() {
+      const start = (currentPage - 1) * perPage;
+      const end = start + perPage;
+      const visible = mahsulotlar.slice(start, end);
+
+      document.getElementById("products").innerHTML = visible.map(m => `
+        <div class="product">
+          <img src="${m.rasm}" onclick="openModal(this)">
+          <h3>${m.nom}</h3>
+          <p class="price">${m.narx.toLocaleString()} so'm</p>
+          <p>Razmer: ${m.razmer}</p>
+          <select id="qty-${m.id}">${[1,2,3,4,5].map(n=>`<option value="${n}">${n}</option>`)}</select><br>
+          <button class="btn" onclick="addToCart(${m.id})">Korzinkaga qo‘shish</button>
+        </div>`).join("");
+
+      const totalPages = Math.ceil(mahsulotlar.length / perPage);
+      document.getElementById("pagination").innerHTML =
+        Array.from({length: totalPages}, (_, i) => `<button class="page-btn ${i+1===currentPage?'active':''}" onclick="goToPage(${i+1})">${i+1}</button>`).join("");
+    }
+
+    function goToPage(p) { currentPage = p; render(); }
+
+    function addToCart(id) {
+      const item = mahsulotlar.find(m => m.id === id);
+      const qty = +document.getElementById(`qty-${id}`).value;
+      const existing = cart.find(c => c.id === id);
+      if (existing) existing.qty += qty;
+      else cart.push({...item, qty});
+      updateCart();
+    }
+
+    function updateCart() {
+      document.getElementById("cart-items").innerHTML =
+        cart.map(i => `<li>${i.nom} — ${i.qty} ta — ${(i.qty*i.narx).toLocaleString()} so'm</li>`).join("");
+    }
+
+    function submitOrder(e) {
+      e.preventDefault();
+      const name = document.getElementById("name").value;
+      const phone = document.getElementById("phone").value;
+      if (cart.length === 0) return alert("Korzinkangiz bo‘sh");
+      let msg = `🛒 Buyurtma\n👤 ${name}\n📞 ${phone}\n`;
+      cart.forEach(i => msg += `- ${i.nom} — ${i.qty} ta\n`);
+      fetch("https://api.telegram.org/bot7574033100:AAGNZ0TLWWUS75faGkN0TZPg58aJ5UQqY4I/sendMessage", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({chat_id: 1314698716, text: msg})
+      }).then(r => {
+        if (r.ok) alert("✅ Buyurtma yuborildi!");
+        else alert("❌ Xatolik: " + r.status);
+      });
+      cart.length = 0;
+      updateCart();
+    }
+
+    function openModal(img) {
+      document.getElementById("imgModal").style.display = "block";
+      document.getElementById("modalImage").src = img.src;
+    }
+    function closeModal() {
+      document.getElementById("imgModal").style.display = "none";
+    }
+
+    function toggleAdmin() {
+      const p = prompt("Parolni kiriting:");
+      if (p === "admin123") {
+        document.getElementById("admin-panel").style.display = "block";
+      } else alert("❌ Noto‘g‘ri parol!");
+    }
+
+    function addProduct(e) {
+      e.preventDefault();
+      const nom = document.getElementById("p-name").value;
+      const narx = +document.getElementById("p-price").value;
+      const razmer = document.getElementById("p-size").value;
+      const rasm = document.getElementById("p-img").value;
+      const yangi = {
+        id: Date.now(), nom, narx, razmer, rasm
+      };
+      mahsulotlar.unshift(yangi);
+      localStorage.setItem("mahsulotlar", JSON.stringify(mahsulotlar));
+      render();
+      alert("✅ Mahsulot qo‘shildi");
+      e.target.reset();
+    }
+
+    render();
+  </script>
+</body>
+</html>
